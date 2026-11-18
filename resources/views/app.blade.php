@@ -1,40 +1,109 @@
-<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MZOUTI Files</title>
-<style>
-:root{color-scheme:dark;--bg:#090914;--panel:#151529;--line:#30304a;--muted:#aaaac3;--p:#8b5cf6;--m:#00d1b2}*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 10% 0%,#251542,transparent 34%),var(--bg);color:#f7f5ff;font:15px system-ui}main{max-width:1120px;margin:auto;padding:22px}.head,.actions,.search,.chips{display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:space-between}.brand{font-size:23px;font-weight:900}.brand span,.tag{color:var(--m)}button{border:0;border-radius:12px;padding:11px 16px;background:var(--p);color:white;font-weight:700;cursor:pointer}.secondary{background:#25253e;border:1px solid var(--line)}.mint{background:var(--m);color:#071512}input{background:#111122;color:white;border:1px solid var(--line);border-radius:12px;padding:13px;min-width:0;flex:1}.hero{padding:52px 0 30px;max-width:750px}.hero h1{font-size:clamp(36px,6vw,58px);line-height:1.03;margin:12px 0}.muted{color:var(--muted);line-height:1.6}.section{margin:34px 0}.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:15px}.card,.panel{background:linear-gradient(145deg,#19192f,#10101d);border:1px solid var(--line);border-radius:17px;padding:17px}.cover{height:120px;border-radius:12px;background:linear-gradient(135deg,#44256c,#087d72);display:grid;place-items:center;font-size:34px}.tag{font-size:12px;text-transform:uppercase}.chip{background:#17172a;border:1px solid var(--line);border-radius:30px;padding:8px 13px;color:white}.modal{position:fixed;inset:0;background:#000b;display:grid;place-items:center;padding:16px;z-index:5}.modalbox{background:#111121;border:1px solid var(--line);border-radius:18px;padding:22px;width:min(720px,100%);max-height:90vh;overflow:auto}.hidden{display:none!important}.field{width:100%;margin:8px 0 14px}.notice{padding:12px;background:#1a302d;border-radius:12px;margin:10px 0}iframe{width:100%;height:65vh;background:white;border:0}footer{margin-top:50px;border-top:1px solid var(--line);padding:25px 0;color:var(--muted)}@media(max-width:600px){main{padding:14px}.hero{padding-top:32px}.search{flex-direction:column;align-items:stretch}}
-</style></head><body><main>
-<header class="head"><div class="brand">MZOUTI <span>FILES</span></div><div class="actions"><button class="secondary" onclick="document.querySelector('#library').scrollIntoView()">Bibliothèque</button><button id="account">Connexion</button></div></header>
-<section class="hero"><div class="tag">BIBLIOTHÈQUE NUMÉRIQUE</div><h1>Apprenez, découvrez et <span style="color:var(--m)">explorez</span>.</h1><p class="muted">Documents, livres, cours et outils réunis au même endroit. Consultez les contenus publics et déverrouillez les ressources Premium avec votre code personnel.</p><div class="search"><input id="search" placeholder="Rechercher un document, un livre…"><button id="searchBtn">Rechercher</button></div><p id="status" class="muted">Exploration libre sans compte.</p></section>
-<section id="library" class="section"><h2>Catégories</h2><div id="categories" class="chips"></div><h2>Bibliothèque</h2><div id="products" class="grid"><div class="panel">Chargement…</div></div></section>
-<section class="section"><h2>Pensées & histoires</h2><div id="posts" class="grid"></div></section>
-<section class="section"><h2>Mes notifications</h2><button class="secondary" id="notificationsBtn">Afficher mes notifications</button><div id="notifications"></div></section>
-<section id="adminPanel" class="section hidden"><h2>Administration · Commandes en attente</h2><div id="adminOrders" class="grid"></div></section>
-<footer>© {{ date('Y') }} MZOUTI Files</footer></main>
-<div id="modal" class="modal hidden"><div class="modalbox"><div class="head"><h2 id="modalTitle">MZOUTI</h2><button class="secondary" id="close">Fermer</button></div><div id="modalBody"></div></div></div>
-<script>window.MZOUTI={url:@json(config('services.supabase.url')),key:@json(config('services.supabase.publishable_key')),bucket:@json(config('services.supabase.bucket')),payment:{recipient:@json(config('services.payments.recipient_name')),moncash:@json(config('services.payments.moncash')),natcash:@json(config('services.payments.natcash'))}};</script>
-<script type="module">
-import{createClient}from'https://esm.sh/@supabase/supabase-js@2.57.4';
-const c=window.MZOUTI,s=createClient(c.url,c.key),$=id=>document.getElementById(id);let user=null,items=[],cat='all';
-const esc=x=>String(x??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
-function modal(t,h){$('modalTitle').textContent=t;$('modalBody').innerHTML=h;$('modal').classList.remove('hidden')}function close(){$('modal').classList.add('hidden')}$('close').onclick=close;
-async function auth(){const{data}=await s.auth.getSession();user=data.session?.user||null;$('account').textContent=user?'Mon compte':'Connexion';$('status').textContent=user?'Connecté : '+user.email:'Exploration libre sans compte';let isAdmin=user?.app_metadata?.role==='admin';$('adminPanel').classList.toggle('hidden',!isAdmin);if(isAdmin)loadAdminOrders()}
-s.auth.onAuthStateChange(()=>setTimeout(auth,0));
-$('account').onclick=()=>{if(user){modal('Mon compte','<p>'+esc(user.email)+'</p><button id="logout">Se déconnecter</button>');$('logout').onclick=async()=>{await s.auth.signOut();close();auth()};return}modal('Connexion','<p class="muted">Connectez-vous pour commander et recevoir vos codes Premium.</p><button class="mint" id="google">Continuer avec Google</button><hr><input id="email" class="field" type="email" placeholder="E-mail"><input id="pass" class="field" type="password" placeholder="Mot de passe"><div class="actions"><button id="login">Connexion</button><button class="secondary" id="register">Créer un compte</button></div><p id="err" class="muted"></p>');$('google').onclick=async()=>{let{error}=await s.auth.signInWithOAuth({provider:'google',options:{redirectTo:location.origin}});if(error)$('err').textContent=error.message};$('login').onclick=async()=>{let{error}=await s.auth.signInWithPassword({email:$('email').value,password:$('pass').value});if(error)$('err').textContent=error.message;else close()};$('register').onclick=async()=>{let{error}=await s.auth.signUp({email:$('email').value,password:$('pass').value});$('err').textContent=error?.message||'Vérifiez votre e-mail pour confirmer le compte.'}};
-async function loadCats(){let{data}=await s.from('categories').select('id,name').eq('is_visible',true).order('sort_order');$('categories').innerHTML='<button class="chip" data-cat="all">Tout</button>'+(data||[]).map(x=>'<button class="chip" data-cat="'+x.id+'">'+esc(x.name)+'</button>').join('');$('categories').querySelectorAll('button').forEach(b=>b.onclick=()=>{cat=b.dataset.cat;loadCats();loadItems()})}
-async function loadItems(){let q=s.from('digital_products').select('id,title,slug,summary,product_type,is_premium,price_amount,currency,category_id,storage_path').eq('is_published',true).order('published_at',{ascending:false}).limit(60);if(cat!=='all')q=q.eq('category_id',cat);let term=$('search').value.trim();if(term)q=q.ilike('title','%'+term+'%');let{data,error}=await q;if(error){$('products').textContent=error.message;return}items=data||[];$('products').innerHTML=items.map(p=>'<article class="card"><div class="cover">📚</div><div class="tag">'+(p.is_premium?'PREMIUM':'GRATUIT')+'</div><h3>'+esc(p.title)+'</h3><p class="muted">'+esc(p.summary||'Ouvrir ce contenu')+'</p><p><b>'+(p.is_premium?esc(p.price_amount)+' '+esc(p.currency):'Gratuit')+'</b></p><button data-open="'+p.slug+'">Ouvrir</button></article>').join('')||'<div class="panel">Aucun contenu publié pour le moment.</div>';$('products').querySelectorAll('[data-open]').forEach(b=>b.onclick=()=>openProduct(b.dataset.open))}
-async function openProduct(slug){let p=items.find(x=>x.slug===slug);if(p.is_premium){modal(p.title,'<p>Produit Premium · '+esc(p.price_amount)+' '+esc(p.currency)+'</p><label>Votre code d’accès</label><input id="code" class="field" placeholder="Code Premium"><button id="verify">Valider le code</button><hr><button class="mint" id="buy">Acheter</button>');$('verify').onclick=async()=>{if(!user)return $('account').click();let{data,error}=await s.rpc('verify_product_access',{p_product_slug:p.slug,p_code:$('code').value.trim().toUpperCase()});if(error||!data)return alert(error?.message||'Code invalide ou non autorisé.');showFile(p)};$('buy').onclick=()=>buy(p)}else{modal(p.title,'<p>'+esc(p.summary||'')+'</p><button id="read">Lire le document</button>');$('read').onclick=()=>showFile(p)}}
-async function showFile(p){if(!p.storage_path)return alert('Fichier non ajouté.');let{data,error}=await s.storage.from(c.bucket).createSignedUrl(p.storage_path,300);if(error)return alert(error.message);modal(p.title,'<iframe src="'+esc(data.signedUrl)+'#toolbar=1"></iframe><p><a target="_blank" rel="noopener" href="'+esc(data.signedUrl)+'">Télécharger / ouvrir</a></p>')}
-async function buy(p){if(!user)return $('account').click();let pay=c.payment;modal('Paiement — '+p.title,'<p>Montant : <b>'+esc(p.price_amount)+' '+esc(p.currency)+'</b></p><div class="panel">Bénéficiaire : '+esc(pay.recipient||'À configurer')+'<br>MonCash : '+esc(pay.moncash||'À configurer')+'<br>NatCash : '+esc(pay.natcash||'À configurer')+'</div><label>Référence de paiement</label><input id="ref" class="field"><label>Preuve de paiement (image/PDF)</label><input id="proof" type="file" class="field" accept="image/*,application/pdf"><button class="mint" id="send">Envoyer ma commande</button><p class="muted">L’accès n’est pas immédiat : l’administrateur vérifie d’abord le paiement.</p>');$('send').onclick=async()=>{let f=$('proof').files[0];if(!f)return alert('Ajoutez la preuve de paiement.');let path='payment-proofs/'+user.id+'/'+crypto.randomUUID()+'-'+f.name.replace(/[^a-zA-Z0-9._-]/g,'_');let up=await s.storage.from(c.bucket).upload(path,f,{contentType:f.type});if(up.error)return alert(up.error.message);let{error}=await s.from('orders').insert({user_id:user.id,digital_product_id:p.id,product_title_snapshot:p.title,amount:p.price_amount,currency:p.currency,payment_method:pay.moncash?'MonCash':(pay.natcash?'NatCash':'Manual'),payment_reference:$('ref').value,proof_storage_path:path});if(error)return alert(error.message);modal('Commande envoyée','<div class="notice">Votre commande est en attente de vérification. Vous recevrez votre code dans les notifications après validation.</div>')}}
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="csrf-token" content="{{ csrf_token() }}">
+  <title>MZOUTI Files</title>
+  <meta name="description" content="Apprenez, découvrez et explorez avec MZOUTI Files.">
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/mzouti.css">
+</head>
+<body>
+<div class="app-shell">
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="MZOUTI Files"><span class="brand-mark">M</span><span>MZOUTI <b>FILES</b></span></a>
+    <div class="top-actions">
+      <button class="ghost-btn" data-view="home">Bibliothèque</button>
+      <button class="icon-btn" data-view="notifications" aria-label="Notifications">♧<i id="notifDot"></i></button>
+      <button class="profile-chip" data-view="profile"><img id="topAvatar" src="https://placehold.co/36x36/25183d/c8b5ff?text=M" alt=""><span id="topName">Mon profil</span></button>
+    </div>
+  </header>
 
-async function loadAdminOrders(){
- if(user?.app_metadata?.role!=='admin')return;
- let{data,error}=await s.from('orders').select('id,product_title_snapshot,amount,currency,status,created_at,user_id,proof_storage_path').eq('status','pending').order('created_at');
- if(error){$('adminOrders').textContent=error.message;return}
- $('adminOrders').innerHTML=(data||[]).map(o=>'<article class="card"><b>'+esc(o.product_title_snapshot)+'</b><p>'+esc(o.amount)+' '+esc(o.currency)+'</p><p class="muted">Commande '+esc(o.id)+'<br>Client '+esc(o.user_id)+'</p><button class="secondary" data-proof="'+esc(o.proof_storage_path||'')+'">Voir la preuve</button> <button data-approve="'+o.id+'">Valider et générer le code</button></article>').join('')||'<p class="muted">Aucune commande en attente.</p>';
- $('adminOrders').querySelectorAll('[data-proof]').forEach(b=>b.onclick=async()=>{if(!b.dataset.proof)return alert('Aucune preuve enregistrée.');let{data,error}=await s.storage.from(c.bucket).createSignedUrl(b.dataset.proof,300);if(error)return alert(error.message);window.open(data.signedUrl,'_blank','noopener')});
- $('adminOrders').querySelectorAll('[data-approve]').forEach(b=>b.onclick=async()=>{if(!confirm('Confirmer la réception du paiement et générer le code Premium ?'))return;let{data,error}=await s.rpc('approve_order_and_issue_code',{p_order_id:b.dataset.approve});if(error)return alert(error.message);alert('Commande validée. Code : '+data+'. Le code a aussi été envoyé dans les notifications du client.');loadAdminOrders()});
-}
+  <main id="main">
+    <section id="view-home" class="view active">
+      <div class="hero">
+        <div class="hero-copy"><span class="eyebrow">VOTRE ESPACE NUMÉRIQUE</span><h1>Apprenez, découvrez<br>et <em>explorez.</em></h1><p>Une bibliothèque pour lire, apprendre et partager vos découvertes.</p></div>
+        <div class="hero-orb"><span>MF</span></div>
+      </div>
+      <div class="search-wrap"><span>⌕</span><input id="searchInput" placeholder="Rechercher une connaissance, un livre, une histoire..."><kbd>⌘ K</kbd></div>
+      <nav id="categories" class="categories" aria-label="Catégories"></nav>
+      <div class="section-heading"><div><span class="eyebrow">À DÉCOUVRIR</span><h2>La bibliothèque</h2></div><button class="text-btn" id="refreshBtn">Actualiser ↗</button></div>
+      <div id="libraryGrid" class="library-grid"><div class="empty-state">Chargement de la bibliothèque...</div></div>
+    </section>
 
-async function posts(){let{data}=await s.from('editorial_posts').select('title,section,excerpt').eq('is_published',true).order('published_at',{ascending:false}).limit(6);$('posts').innerHTML=(data||[]).map(p=>'<article class="card"><div class="tag">'+esc(p.section)+'</div><h3>'+esc(p.title)+'</h3><p class="muted">'+esc(p.excerpt)+'</p></article>').join('')||'<p class="muted">Les publications seront bientôt disponibles.</p>'}
-$('notificationsBtn').onclick=async()=>{if(!user)return $('account').click();let{data,error}=await s.from('notifications').select('id,title,message,created_at,read_at').order('created_at',{ascending:false}).limit(25);if(error)return alert(error.message);$('notifications').innerHTML=(data||[]).map(n=>'<div class="notice"><b>'+esc(n.title)+'</b><p>'+esc(n.message)+'</p></div>').join('')||'<p class="muted">Aucune notification.</p>';let ids=(data||[]).filter(n=>!n.read_at).map(n=>n.id);if(ids.length)await s.from('notifications').update({read_at:new Date().toISOString()}).in('id',ids)};
-$('searchBtn').onclick=loadItems;$('search').addEventListener('keydown',e=>{if(e.key==='Enter')loadItems()});await auth();await Promise.all([loadCats(),loadItems(),posts()]);
-</script></body></html>
+    <section id="view-profile" class="view">
+      <div class="page-heading"><span class="eyebrow">ESPACE PERSONNEL</span><h1>Mon profil</h1></div>
+      <div class="profile-layout">
+        <div class="panel profile-card">
+          <img id="profileAvatar" class="big-avatar" src="https://placehold.co/112x112/25183d/c8b5ff?text=M" alt="Photo de profil">
+          <h2 id="profileHeading">Bienvenue</h2><p id="profileEmail" class="muted"></p>
+          <label class="upload-label">Changer la photo<input id="avatarInput" type="file" accept="image/*"></label>
+          <div class="stats-row"><div><b id="myWorksCount">0</b><span>Œuvres</span></div><div><b id="myFavCount">0</b><span>Favoris</span></div><div><b id="inviteTotal">0/15</b><span>Invitations</span></div></div>
+        </div>
+        <div class="panel form-panel"><h2>Informations personnelles</h2>
+          <label>Nom affiché<input id="displayName" maxlength="60" placeholder="Nom affiché"></label>
+          <label>Surnom / pseudonyme<input id="username" maxlength="30" placeholder="MonPseudo"></label>
+          <label>Présentation<textarea id="bio" maxlength="240" rows="3" placeholder="Quelques mots sur vous..."></textarea></label>
+          <button class="primary-btn" id="saveProfile">Enregistrer les modifications</button>
+          <button class="danger-link" id="logoutBtn">Se déconnecter</button>
+        </div>
+      </div>
+      <div class="panel invite-panel"><div><span class="eyebrow">FAITES GRANDIR LA COMMUNAUTÉ</span><h2>Inviter une personne</h2><p class="muted">Un code universel est attribué après 5, 10 et 15 inscriptions valides, soit 3 récompenses maximum.</p></div>
+        <div class="invite-progress"><b id="inviteProgress">0 / 15</b><div class="progress-track"><i id="inviteBar"></i></div><small id="inviteStatus">Encore 5 invitations pour votre première récompense.</small><button class="secondary-btn" id="shareInvite">Partager mon invitation</button></div>
+      </div>
+      <div class="panel"><div class="section-heading"><h2>Mon espace créateur</h2><button class="primary-btn" data-view="creator">Créer une œuvre +</button></div><div id="myWorks" class="my-works muted">Vos publications apparaîtront ici.</div></div>
+    </section>
+
+    <section id="view-favorites" class="view"><div class="page-heading"><span class="eyebrow">VOTRE SÉLECTION</span><h1>Mes favoris</h1></div><div id="favoritesGrid" class="library-grid"></div></section>
+    <section id="view-playlist" class="view"><div class="page-heading"><span class="eyebrow">À CONSULTER PLUS TARD</span><h1>Ma playlist</h1></div><div id="playlistGrid" class="library-grid"></div></section>
+    <section id="view-notifications" class="view"><div class="page-heading"><span class="eyebrow">ACTUALITÉS</span><h1>Notifications</h1></div><div id="notificationsList" class="panel muted">Connectez-vous pour consulter vos notifications.</div></section>
+
+    <section id="view-auth" class="view"><div class="auth-card panel"><div class="brand large"><span class="brand-mark">M</span><span>MZOUTI <b>FILES</b></span></div><span class="eyebrow">VOTRE ESPACE VOUS ATTEND</span><h1 id="authTitle">Bon retour parmi nous</h1><p class="muted">Connectez-vous pour retrouver votre bibliothèque personnelle.</p>
+      <div id="signupFields" hidden><label>Nom affiché<input id="authDisplayName" placeholder="Votre nom"></label><label>Code d'invitation (facultatif)<input id="referralCode" placeholder="Code reçu"></label></div>
+      <label>Adresse e-mail<input id="authEmail" type="email" autocomplete="email" placeholder="vous@exemple.com"></label><label>Mot de passe<input id="authPassword" type="password" autocomplete="current-password" placeholder="••••••••"></label>
+      <button class="primary-btn full" id="authSubmit">Se connecter</button><button class="secondary-btn full" id="googleLogin">Continuer avec Google</button><div class="auth-switch"><button id="toggleAuth">Créer un compte</button><button id="forgotPassword">Mot de passe oublié ?</button></div>
+    </div></section>
+
+    <section id="view-creator" class="view"><div class="page-heading"><span class="eyebrow">ESPACE CRÉATEUR</span><h1>Publier une œuvre</h1><p class="muted">Chaque publication est vérifiée par l'équipe avant d'être rendue publique.</p></div>
+      <div class="panel form-panel">
+        <label>Titre<input id="workTitle" maxlength="120" placeholder="Titre de votre œuvre"></label>
+        <label>Catégorie<select id="workCategory"><option value="histoires">Histoires</option><option value="pensees">Pensées</option><option value="livres">Livres</option><option value="applications">Applications</option><option value="documents">Documents</option></select></label>
+        <label>Image de couverture<input id="coverInput" type="file" accept="image/*"></label>
+        <label>Description<textarea id="workDescription" rows="3" placeholder="Présentez votre œuvre..."></textarea></label>
+        <label>Nom de l'auteur<input id="authorName" placeholder="Nom affiché comme auteur"></label>
+        <div class="editor-toggle"><button class="active" data-editor="write">Écrire directement</button><button data-editor="upload">Téléverser un fichier</button></div>
+        <div id="writeEditor"><label>Contenu<textarea id="workContent" rows="10" placeholder="Écrivez votre connaissance ici..."></textarea></label></div>
+        <div id="uploadEditor" hidden><label>Fichier de l'œuvre<input id="workFile" type="file" accept=".pdf,.doc,.docx,.txt,.epub,.zip"></label><p class="muted small">Les fichiers sont stockés dans un espace privé jusqu'à validation.</p></div>
+        <button class="primary-btn" id="submitWork">Envoyer pour validation</button>
+      </div>
+    </section>
+
+    <section id="view-messages" class="view"><div class="page-heading"><span class="eyebrow">COMMUNAUTÉ</span><h1>Messages</h1></div>
+      <div class="messages-layout"><aside class="panel conversation-list"><div class="pinned-group"><span>📌 GROUPE ÉPINGLÉ</span><b>Groupe général MZOUTI</b><small id="groupState">Discussion ouverte</small></div><div class="exact-search"><label>Nouvelle conversation<input id="userLookup" placeholder="E-mail ou pseudonyme exact"></label><button class="secondary-btn" id="findUser">Rechercher</button><div id="lookupResult"></div></div><div id="conversationItems"></div></aside>
+      <div class="panel chat-panel"><div id="chatHeader" class="chat-header">Sélectionnez une conversation</div><div id="chatMessages" class="chat-messages"></div><form id="sendMessage" class="chat-compose"><input id="messageText" placeholder="Écrire un message..." autocomplete="off"><button class="primary-btn">Envoyer</button></form></div></div>
+    </section>
+
+    <section id="view-admin" class="view"><div class="page-heading"><span class="eyebrow">ESPACE SÉCURISÉ</span><h1>Administration</h1></div><div class="panel"><h2>Publications à valider</h2><div id="pendingWorks"></div></div><div class="panel"><h2>Contrôle du groupe général</h2><p class="muted">Les membres peuvent toujours lire l'historique. La fermeture bloque l'envoi de nouveaux messages.</p><button class="secondary-btn" id="toggleGroup">Ouvrir / fermer les discussions</button><div id="adminMessageTools"></div></div></section>
+  </main>
+
+  <nav class="bottom-nav" aria-label="Navigation principale">
+    <button data-view="profile"><span>♙</span><small>Profil</small></button>
+    <button data-view="favorites"><span>♡</span><small>Favoris</small></button>
+    <button class="home-nav active" data-view="home"><span>⌂</span><small>Accueil</small></button>
+    <button data-view="playlist"><span>▤</span><small>Playlist</small></button>
+    <button data-view="messages"><span>✉</span><small>Messages</small></button>
+  </nav>
+</div>
+<div id="toast" class="toast" role="status"></div>
+<div id="detailModal" class="modal" hidden><div class="modal-card"><button class="modal-close" id="closeDetail">×</button><div id="detailContent"></div></div></div>
+<script>
+window.MZOUTI = {
+  url: @json(config('services.supabase.url')),
+  key: @json(config('services.supabase.publishable_key')),
+  bucket: @json(config('services.supabase.bucket', 'mzouti-private')),
+  sharedSlug: @json($sharedSlug ?? null)
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="/js/mzouti.js" defer></script>
+</body></html>

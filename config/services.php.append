@@ -1,0 +1,6 @@
+// Merge this entry into the existing config/services.php 'return' array:
+'supabase' => [
+    'url' => env('SUPABASE_URL'),
+    'publishable_key' => env('SUPABASE_PUBLISHABLE_KEY'),
+    'bucket' => env('SUPABASE_STORAGE_BUCKET', 'mzouti-private'),
+],

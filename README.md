@@ -1,27 +1,52 @@
-# MZOUTI Files
+# MZOUTI Files — V1
 
-Laravel 12 application shell with Supabase Auth, PostgreSQL, Storage and RLS.
+Base Laravel + Supabase pour la plateforme MZOUTI Files.
 
-## Local setup
-1. PHP 8.2+ and Composer 2.
-2. `composer install`
-3. `cp .env.example .env`
-4. Generate an application key: `php artisan key:generate`
-5. `php artisan serve`
+## Contenu
+- Interface responsive sombre violet/cyan.
+- Navigation inférieure : Profil, Favoris, Accueil, Playlist, Notifications.
+- Catégories : Tous, Histoires, Pensées, Livres, Applications, Documents.
+- Authentification Supabase (e-mail/mot de passe, Google si activé dans Supabase).
+- Profil modifiable : nom affiché, pseudonyme, bio et avatar.
+- Bibliothèque, recherche, favoris, playlist « À voir plus tard » et partage.
+- Espace créateur avec rédaction/téléversement et validation obligatoire.
+- Messagerie privée par recherche exacte (e-mail ou pseudonyme exact).
+- Groupe général automatique, permanent, sans compteur de membres public.
+- Invitations : récompense à 5, 10 et 15 inscriptions valides, un code à chaque palier.
+- Notifications et administration des publications/groupe.
 
-## Supabase
-Project ref: `gmisfyvjuifptwvwsuax`. The initial schema, RLS policies, private bucket and RPCs have been provisioned. The publishable key is public by design; never expose a service_role or secret key.
+## Installation
+1. Copier les fichiers de ce paquet dans le projet Laravel existant en conservant les fichiers propres au projet.
+2. Installer les dépendances Laravel : `composer install`.
+3. Copier `.env.example` vers `.env`, puis `php artisan key:generate`.
+4. Renseigner `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY` et `SUPABASE_STORAGE_BUCKET`.
+5. Exécuter le SQL `supabase/migrations/202611180001_mzouti_files_v1.sql` dans Supabase SQL Editor.
+6. Dans Supabase Auth, configurer les URL autorisées et activer les fournisseurs voulus (e-mail, Google).
+7. Créer un compte administrateur, puis promouvoir ce compte depuis SQL :
+   `update public.profiles set role = 'admin' where id = 'UUID_DU_COMPTE';`
+8. Créer dans Supabase Storage les buckets `avatars` (public) et `mzouti-private` (privé).
+9. Démarrer : `php artisan serve`.
 
-## Google OAuth
-The sign-in button calls Supabase Auth with provider `google`. In Supabase Dashboard > Authentication > Sign In / Providers > Google, enable Google and enter the Google OAuth Web Client ID and Client Secret. In Google Cloud, add this callback:
-`https://gmisfyvjuifptwvwsuax.supabase.co/auth/v1/callback`
-In Supabase URL Configuration, add the deployed Render URL and local `http://localhost:8000` to the redirect allow list. Google OAuth cannot complete until real Google credentials are supplied.
+## Variables .env
+```env
+APP_NAME="MZOUTI Files"
+APP_ENV=production
+APP_DEBUG=false
+APP_URL=https://votre-domaine
+SUPABASE_URL=https://PROJECT.supabase.co
+SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
+SUPABASE_STORAGE_BUCKET=mzouti-private
+```
 
-## Render
-Deploy this repository as a Docker web service. Set APP_KEY to a generated Laravel key and APP_URL to the Render URL. Add MonCash/NatCash recipient name and numbers as private environment variables before accepting payments.
+## Déploiement Render
+Le Dockerfile du projet existant peut être conservé s'il installe les extensions PHP nécessaires à votre version Laravel. Définir les variables ci-dessus dans Render, puis déployer.
 
-## Admin
-The database RPC `approve_order_and_issue_code` checks trusted `app_metadata.role=admin`, approves a pending order, stores only a SHA-256 hash, and sends the raw code to the customer's notification. Never use editable user_metadata for admin authorization.
+## Important — état de cette livraison
+Ceci est une première livraison complète du code applicatif et du schéma SQL, mais elle n'est pas encore vérifiée sur votre projet Supabase réel ni testée de bout en bout en production. Il faut appliquer la migration, configurer Auth/Storage et tester les parcours avant d'accepter des paiements ou de distribuer des codes Premium. Les paiements ne sont volontairement pas activés dans cette version.
 
-## Important
-This is an initial working web foundation, not a production-complete admin CMS. Test OAuth, storage, proof uploads, payment approval and access-code flows before accepting payments.
+## Sécurité
+- Les autorisations sont imposées par RLS dans Supabase, pas uniquement par l'interface.
+- Les recherches de membres passent par une fonction SQL d'exact-match ; aucun annuaire public n'est exposé.
+- Le groupe général est ajouté automatiquement à chaque nouveau profil et ne peut pas être quitté par l'interface.
+- Les récompenses d'invitation sont créées côté base de données à chaque palier.
+- Le code de récompense est globalement à usage unique : son utilisation doit être intégrée au produit concerné avant toute promesse d'accès Premium.
