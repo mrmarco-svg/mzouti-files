@@ -114,7 +114,16 @@
         <label>Nom de l'auteur<input id="authorName" placeholder="Nom affiché comme auteur"></label>
         <div class="editor-toggle"><button class="active" data-editor="write">Écrire directement</button><button data-editor="upload">Téléverser un fichier</button></div>
         <div id="writeEditor"><label>Contenu<textarea id="workContent" rows="10" placeholder="Écrivez votre connaissance ici..."></textarea></label></div>
-        <div id="uploadEditor" hidden><label>Fichier de l'œuvre<input id="workFile" type="file" accept=".pdf,.doc,.docx,.txt,.epub,.zip"></label><p class="muted small">Les fichiers sont stockés dans un espace privé jusqu'à validation.</p></div>
+        <div id="uploadEditor" hidden>
+    <label>Fichier de l'œuvre
+        <input
+            id="workFile"
+            type="file"
+            accept=".pdf,.doc,.docx,.txt,.epub,.zip,.apk,application/vnd.android.package-archive,application/octet-stream"
+        >
+    </label>
+    <p class="muted small">Les fichiers sont stockés dans un espace privé jusqu'à validation.</p>
+</div>
         <button class="primary-btn" id="submitWork">Envoyer pour validation</button>
       </div>
     </section>

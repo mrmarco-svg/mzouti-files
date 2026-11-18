@@ -104,7 +104,50 @@ $('googleLogin').onclick=async()=>{const {error}=await sb.auth.signInWithOAuth({
 $('forgotPassword').onclick=async()=>{const email=$('authEmail').value.trim();if(!email)return say('Saisissez votre e-mail');const {error}=await sb.auth.resetPasswordForEmail(email,{redirectTo:location.origin});say(error?.message||'E-mail de réinitialisation envoyé')};
 $('searchInput').addEventListener('input',renderWorks);$('refreshBtn').onclick=fetchWorks;
 document.querySelectorAll('[data-editor]').forEach(b=>b.onclick=()=>{editorMode=b.dataset.editor;document.querySelectorAll('[data-editor]').forEach(x=>x.classList.toggle('active',x===b));$('writeEditor').hidden=editorMode!=='write';$('uploadEditor').hidden=editorMode!=='upload'});
-$('submitWork').onclick=async()=>{if(!user)return view('auth');const title=$('workTitle').value.trim(),category=$('workCategory').value;if(!title)return say('Ajoutez un titre');let cover_url=null,cover_path=null,file_path=null;const cover=$('coverInput').files[0];if(cover){if(!cover.type.startsWith('image/'))return say('Le fichier de couverture doit être une image.');if(cover.size>8*1024*1024)return say('Couverture limitée à 8 Mo.');cover_path=`works/${user.id}/covers/${Date.now()}-${slug(cover.name)}`;const r=await sb.storage.from(cfg.bucket).upload(cover_path,cover,{contentType:cover.type,upsert:false});if(r.error)return say(r.error.message)}let content=$('workContent').value;if(editorMode==='upload'){const f=$('workFile').files[0];if(!f)return say('Choisissez un fichier');const p=`works/${user.id}/${Date.now()}-${slug(f.name)}`;const r=await sb.storage.from(cfg.bucket).upload(p,f);if(r.error)return say(r.error.message);file_path=p;content='Fichier joint : '+f.name}const {error}=await sb.from('works').insert({author_id:user.id,title,slug:slug(title)+'-'+Date.now().toString().slice(-6),category,description:$('workDescription').value,author_name:$('authorName').value||profile?.display_name,content,cover_url,cover_path,file_path,status:'pending'});say(error?.message||'Œuvre envoyée pour validation');if(!error){['workTitle','workDescription','authorName','workContent'].forEach(id=>$(id).value='');view('profile')}};
+$('submitWork').onclick=async()=>{if(!user)return view('auth');const title=$('workTitle').value.trim(),category=$('workCategory').value;if(!title)return say('Ajoutez un titre');let cover_url=null,cover_path=null,file_path=null;const cover=$('coverInput').files[0];if(cover){if(!cover.type.startsWith('image/'))return say('Le fichier de couverture doit être une image.');if(cover.size>8*1024*1024)return say('Couverture limitée à 8 Mo.');cover_path=`works/${user.id}/covers/${Date.now()}-${slug(cover.name)}`;const r=await sb.storage.from(cfg.bucket).upload(cover_path,cover,{contentType:cover.type,upsert:false});if(r.error)return say(r.error.message)}let content=$('workContent').value;if(editorMode==='upload'){
+    const f=$('workFile').files[0];
+
+    if(!f)return say('Choisissez un fichier');
+
+    const ext=(f.name.split('.').pop()||'').toLowerCase();
+
+    const allowed=['pdf','doc','docx','txt','epub','zip','apk'];
+
+    if(!allowed.includes(ext)){
+        return say('Format non autorisé. Formats acceptés : PDF, DOC, DOCX, TXT, EPUB, ZIP et APK.');
+    }
+
+    if(f.size>50*1024*1024){
+        return say('Fichier limité à 50 Mo.');
+    }
+
+    const mimeByExt={
+        apk:'application/vnd.android.package-archive',
+        zip:'application/zip',
+        epub:'application/epub+zip',
+        pdf:'application/pdf',
+        doc:'application/msword',
+        docx:'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        txt:'text/plain'
+    };
+
+    const contentType=
+        (f.type && f.type!=='application/octet-stream')
+        ? f.type
+        : (mimeByExt[ext]||'application/octet-stream');
+
+    const p=`works/${user.id}/${Date.now()}-${slug(f.name)}`;
+
+    const r=await sb.storage.from(cfg.bucket).upload(p,f,{
+        contentType,
+        upsert:false
+    });
+
+    if(r.error)return say(r.error.message);
+
+    file_path=p;
+    content='Fichier joint : '+f.name;
+}const {error}=await sb.from('works').insert({author_id:user.id,title,slug:slug(title)+'-'+Date.now().toString().slice(-6),category,description:$('workDescription').value,author_name:$('authorName').value||profile?.display_name,content,cover_url,cover_path,file_path,status:'pending'});say(error?.message||'Œuvre envoyée pour validation');if(!error){['workTitle','workDescription','authorName','workContent'].forEach(id=>$(id).value='');view('profile')}};
 $('findUser').onclick=async()=>{if(!user)return view('auth');const term=$('userLookup').value.trim();if(!term)return;const {data,error}=await sb.rpc('lookup_member_exact',{search_value:term,search_by_email:term.includes('@')});const member=data?.[0]||null;$('lookupResult').innerHTML=error?'Recherche indisponible':member?`<button class="secondary-btn" id="startDm">${esc(member.display_name||member.username||'Utilisateur')} — Ouvrir la conversation</button>`:'Aucun compte trouvé.';if(member)$('startDm').onclick=()=>openDm(member.id,member.display_name||member.username)};
 async function loadConversations(){if(!user)return view('auth');$('conversationItems').innerHTML='<p class="muted">Groupe général MZOUTI est épinglé ci-dessus.</p>';const {data}=await sb.from('direct_messages').select('sender_id,recipient_id,body,created_at').or(`sender_id.eq.${user.id},recipient_id.eq.${user.id}`).order('created_at',{ascending:false}).limit(100);const ids=[...new Set((data||[]).map(m=>m.sender_id===user.id?m.recipient_id:m.sender_id))];if(ids.length){const {data:ps,error:profileError}=await sb.rpc('get_conversation_profiles',{member_ids:ids});if(profileError){say('Impossible de charger les noms des conversations.');return}$('conversationItems').innerHTML+=(ps||[]).map(p=>`<button class="category" data-dm="${p.id}">${esc(p.display_name||p.username||'Conversation')}</button>`).join('');$('conversationItems').querySelectorAll('[data-dm]').forEach(b=>b.onclick=()=>openDm(b.dataset.dm,b.textContent))}}
 async function openDm(id,name){activeChat={type:'dm',id};$('chatHeader').textContent=name;$('chatMessages').innerHTML='';const {data,error}=await sb.from('direct_messages').select('*').or(`and(sender_id.eq.${user.id},recipient_id.eq.${id}),and(sender_id.eq.${id},recipient_id.eq.${user.id})`).order('created_at');if(error)return say(error.message);(data||[]).forEach(m=>appendMessage(m.body,m.sender_id===user.id));$('sendMessage').onsubmit=e=>sendDm(e,id)}
