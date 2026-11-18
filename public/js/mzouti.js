@@ -27,7 +27,79 @@ $('shareInvite').onclick=async()=>{if(!user)return view('auth');const url=locati
 async function authChanged(u){user=u;if(u){$('view-auth').classList.remove('active');await loadProfile();await fetchWorks();view('home')}else{$('topName').textContent='Connexion';await fetchWorks();view('home')}}
 function setupAuth(){if(!cfg.url||!cfg.key||!window.supabase){say('Configuration Supabase manquante');return}sb=window.supabase.createClient(cfg.url,cfg.key);sb.auth.onAuthStateChange((_e,s)=>{setTimeout(()=>authChanged(s?.user||null),0)});sb.auth.getSession().then(({data})=>authChanged(data.session?.user||null))}
 let signup=false;$('toggleAuth').onclick=()=>{signup=!signup;$('authTitle').textContent=signup?'Créer votre compte':'Bon retour parmi nous';$('signupFields').hidden=!signup;$('authSubmit').textContent=signup?'Créer mon compte':'Se connecter';$('toggleAuth').textContent=signup?'J’ai déjà un compte':'Créer un compte'};
-$('authSubmit').onclick=async()=>{if(!sb)return say('Supabase non configuré');const email=$('authEmail').value.trim(),password=$('authPassword').value;if(signup){const ref=new URLSearchParams(location.search).get('ref');const {error}=await sb.auth.signUp({email,password,options:{data:{display_name:$('authDisplayName').value.trim(),invited_by:ref||null}}});say(error?.message||'Compte créé. Vérifiez votre e-mail.')}else{const {error}=await sb.auth.signInWithPassword({email,password});if(error)say(error.message)}};
+$('authSubmit').onclick = async () => {
+  if (!sb) return say('Supabase non configuré');
+
+  const email = $('authEmail').value.trim();
+  const password = $('authPassword').value;
+
+  if (signup) {
+    const ref = new URLSearchParams(location.search).get('ref');
+
+    const { data, error } = await sb.auth.signUp({
+      email,
+      password,
+      options: {
+        emailRedirectTo: location.origin,
+        data: {
+          display_name: $('authDisplayName').value.trim(),
+          invited_by: ref || null
+        }
+      }
+    });
+
+    if (error) {
+      say(error.message);
+      return;
+    }
+
+    if (data.user && !data.session) {
+      $('authFormFields').style.display = 'none';
+      $('authTitle').style.display = 'none';
+      $('emailConfirmation').style.display = 'block';
+    }
+
+  } else {
+    const { error } = await sb.auth.signInWithPassword({
+      email,
+      password
+    });
+
+    if (error) say(error.message);
+  }
+};
+
+$('openEmailApp').onclick = () => {
+  const email = $('authEmail').value.trim();
+  const isGmail = /@gmail\.com$/i.test(email);
+  const ua = navigator.userAgent || '';
+
+  if (isGmail && /Android/i.test(ua)) {
+    window.location.href =
+      'intent://#Intent;action=android.intent.action.MAIN;category=android.intent.category.APP_EMAIL;package=com.google.android.gm;end';
+
+    setTimeout(() => {
+      window.location.href = 'https://mail.google.com/mail/u/0/#inbox';
+    }, 900);
+
+  } else if (isGmail && /iPhone|iPad|iPod/i.test(ua)) {
+    window.location.href = 'googlegmail://';
+
+    setTimeout(() => {
+      window.location.href = 'https://mail.google.com/mail/u/0/#inbox';
+    }, 900);
+
+  } else if (isGmail) {
+    window.open(
+      'https://mail.google.com/mail/u/0/#inbox',
+      '_blank',
+      'noopener'
+    );
+
+  } else {
+    window.location.href = 'mailto:';
+  }
+};
 $('googleLogin').onclick=async()=>{const {error}=await sb.auth.signInWithOAuth({provider:'google',options:{redirectTo:location.origin}});if(error)say(error.message)};
 $('forgotPassword').onclick=async()=>{const email=$('authEmail').value.trim();if(!email)return say('Saisissez votre e-mail');const {error}=await sb.auth.resetPasswordForEmail(email,{redirectTo:location.origin});say(error?.message||'E-mail de réinitialisation envoyé')};
 $('searchInput').addEventListener('input',renderWorks);$('refreshBtn').onclick=fetchWorks;
