@@ -85,18 +85,218 @@ async function installWork(id) {
 
 function wireCards(el){el.querySelectorAll('[data-fav]').forEach(b=>b.onclick=()=>toggleSaved('favorites',b.dataset.fav));el.querySelectorAll('[data-save]').forEach(b=>b.onclick=()=>toggleSaved('playlist',b.dataset.save));el.querySelectorAll('[data-open]').forEach(b=>b.onclick=()=>openWork(b.dataset.open));el.querySelectorAll('[data-install]').forEach(b=>{b.onclick=()=>installWork(b.dataset.install)})}
 async function toggleSaved(table,id){if(!user)return view('auth');const col=table==='favorites'?'favorites':'playlist_items';const {data}=await sb.from(col).select('id').eq('user_id',user.id).eq('work_id',id).maybeSingle();let r;if(data)r=await sb.from(col).delete().eq('id',data.id);else r=await sb.from(col).insert({user_id:user.id,work_id:id});if(r.error)say(r.error.message);else{say(data?'Retiré':'Enregistré');await fetchWorks()}}
-async function openWork(id){const w=works.find(x=>x.id===id);if(!w)return;const share=location.origin+'/share/'+w.slug;$('detailContent').innerHTML=`<span class="eyebrow">${esc(w.category)}</span><h1>${esc(w.title)}</h1><p class="muted">Par ${esc(w.author_name||'Membre MZOUTI')}</p><p>${esc(w.description)}</p>${w.cover_display_url?`<img class="detail-cover" src="${esc(w.cover_display_url)}" alt="Couverture de ${esc(w.title)}">`:''}<div>${esc(w.content||'')}</div><p><button class="secondary-btn" id="copyShare">Copier le lien de partage</button> <button class="secondary-btn" id="nativeShare">Partager</button></p>`;$('detailModal').hidden=false;
-if (w.category === 'applications') {
-    const installButton = document.createElement('button');
 
-    installButton.className = 'primary-btn';
-    installButton.textContent = 'Installer l’application ↓';
-
-    installButton.onclick = () => installWork(w.id);
-
-    $('detailContent').prepend(installButton);
+function fileExtension(w){
+    const label=(w.content||'').match(/Fichier joint\s*:\s*([^\n\r]+)/i);
+    const name=label?label[1]:(w.file_path||'');
+    const match=name.match(/\.([a-z0-9]{2,6})(?:$|[?#])/i);
+    return match?match[1].toLowerCase():'';
 }
-$('copyShare').onclick=()=>navigator.clipboard.writeText(share).then(()=>say('Lien copié'));$('nativeShare').onclick=()=>navigator.share? navigator.share({title:w.title,url:share}):navigator.clipboard.writeText(share).then(()=>say('Lien copié'))}
+
+function loadExternalScript(src,test){
+    if(test())return Promise.resolve();
+    return new Promise((resolve,reject)=>{
+        const old=document.querySelector('script[data-mzouti-src="'+src+'"]');
+        if(old){
+            old.addEventListener('load',resolve,{once:true});
+            old.addEventListener('error',reject,{once:true});
+            return;
+        }
+        const s=document.createElement('script');
+        s.src=src;
+        s.async=true;
+        s.dataset.mzoutiSrc=src;
+        s.onload=()=>test()?resolve():reject(new Error('Bibliothèque de lecture indisponible.'));
+        s.onerror=()=>reject(new Error('Impossible de charger le lecteur externe.'));
+        document.head.appendChild(s);
+    });
+}
+
+async function signedWorkUrl(w){
+    if(!w.file_path)throw new Error('Aucun fichier joint.');
+    const {data,error}=await sb.storage.from(cfg.bucket)
+        .createSignedUrl(w.file_path,600,{download:false});
+    if(error||!data?.signedUrl)
+        throw new Error(error?.message||'Impossible d’ouvrir le fichier privé.');
+    return data.signedUrl;
+}
+
+function readerFallback(url,label){
+    return '<div class="mzouti-reader-fallback"><p>Aperçu indisponible sur cet appareil.</p><a class="secondary-btn" href="'+esc(url)+'" target="_blank" rel="noopener">'+esc(label||'Télécharger le fichier')+' ↓</a></div>';
+}
+
+async function renderWorkFile(w,host){
+    const ext=fileExtension(w);
+    host.innerHTML='<div class="mzouti-reader-loading">Préparation du lecteur sécurisé…</div>';
+
+    try{
+        const url=await signedWorkUrl(w);
+
+        if(ext==='pdf'){
+            host.innerHTML='<div class="mzouti-reader-toolbar"><b>Lecteur PDF</b><a class="secondary-btn" href="'+esc(url)+'" target="_blank" rel="noopener">Ouvrir / télécharger ↗</a></div><iframe class="mzouti-reader-pdf" src="'+esc(url)+'#toolbar=1&navpanes=0" title="Lecteur PDF"></iframe>';
+
+        }else if(ext==='txt'){
+            const response=await fetch(url);
+            if(!response.ok)throw new Error('Impossible de charger le fichier texte.');
+            const content=await response.text();
+            host.innerHTML='<div class="mzouti-reader-toolbar"><b>Document texte</b><a class="secondary-btn" href="'+esc(url)+'" target="_blank" rel="noopener">Télécharger ↓</a></div><pre class="mzouti-reader-text">'+esc(content)+'</pre>';
+
+        }else if(ext==='epub'){
+            host.innerHTML='<div class="mzouti-reader-toolbar"><b>Lecteur EPUB</b><div><button class="secondary-btn" id="epubPrev">← Précédent</button> <button class="secondary-btn" id="epubNext">Suivant →</button></div></div><div id="mzoutiEpubBook" class="mzouti-reader-epub"></div>';
+
+            await loadExternalScript(
+                'https://cdn.jsdelivr.net/npm/epubjs/dist/epub.min.js',
+                ()=>typeof window.ePub==='function'
+            );
+
+            const book=window.ePub(url);
+            const rendition=book.renderTo('mzoutiEpubBook',{
+                width:'100%',height:'100%',flow:'paginated'
+            });
+
+            await rendition.display();
+            $('epubPrev').onclick=()=>rendition.prev();
+            $('epubNext').onclick=()=>rendition.next();
+
+        }else if(ext==='docx'){
+            host.innerHTML='<div class="mzouti-reader-toolbar"><b>Aperçu Word (DOCX)</b><a class="secondary-btn" href="'+esc(url)+'" target="_blank" rel="noopener">Télécharger ↓</a></div><article id="mzoutiDocxContent" class="mzouti-reader-docx">Conversion du document…</article>';
+
+            const response=await fetch(url);
+            if(!response.ok)throw new Error('Impossible de charger le DOCX.');
+
+            const buffer=await response.arrayBuffer();
+
+            await loadExternalScript(
+                'https://cdn.jsdelivr.net/npm/mammoth/mammoth.browser.min.js',
+                ()=>!!window.mammoth
+            );
+
+            const result=await window.mammoth.convertToHtml({arrayBuffer:buffer});
+            const safe=document.createElement('div');
+            safe.innerHTML=result.value;
+
+            safe.querySelectorAll('script,style,iframe,object,embed,form,svg,math')
+                .forEach(n=>n.remove());
+
+            safe.querySelectorAll('*').forEach(n=>[...n.attributes].forEach(attr=>{
+                if(/^on/i.test(attr.name)||
+                   ((attr.name==='href'||attr.name==='src')&&
+                   !/^(https?:|mailto:|#)/i.test(attr.value))){
+                    n.removeAttribute(attr.name);
+                }
+            }));
+
+            $('mzoutiDocxContent').replaceChildren(...safe.childNodes);
+
+        }else if(ext==='zip'){
+            host.innerHTML='<div class="mzouti-reader-toolbar"><b>Contenu de l’archive ZIP</b><a class="secondary-btn" href="'+esc(url)+'" target="_blank" rel="noopener">Télécharger le ZIP ↓</a></div><div id="mzoutiZipList" class="mzouti-reader-zip">Lecture de l’archive…</div>';
+
+            const response=await fetch(url);
+            if(!response.ok)throw new Error('Impossible de charger le ZIP.');
+
+            const blob=await response.blob();
+            if(blob.size>50*1024*1024)
+                throw new Error('Archive trop volumineuse pour l’aperçu (50 Mo maximum).');
+
+            await loadExternalScript(
+                'https://cdn.jsdelivr.net/npm/jszip/dist/jszip.min.js',
+                ()=>!!window.JSZip
+            );
+
+            const archive=await window.JSZip.loadAsync(blob);
+            const entries=Object.values(archive.files).filter(f=>!f.dir);
+            const list=$('mzoutiZipList');
+
+            if(!entries.length){
+                list.textContent='Archive vide.';
+                return;
+            }
+
+            list.innerHTML=entries.map((f,i)=>
+                '<div class="mzouti-zip-row"><span>'+esc(f.name)+'</span><button class="secondary-btn" data-zip-index="'+i+'">Extraire ↓</button></div>'
+            ).join('');
+
+            list.querySelectorAll('[data-zip-index]').forEach(button=>
+                button.onclick=async()=>{
+                    const file=entries[Number(button.dataset.zipIndex)];
+                    try{
+                        if((file._data?.uncompressedSize||0)>25*1024*1024)
+                            return say('Fichier trop volumineux (25 Mo maximum).');
+
+                        const out=await file.async('blob');
+                        const objectUrl=URL.createObjectURL(out);
+                        const link=document.createElement('a');
+
+                        link.href=objectUrl;
+                        link.download=file.name.split('/').pop()||'fichier';
+
+                        document.body.appendChild(link);
+                        link.click();
+                        link.remove();
+
+                        setTimeout(()=>URL.revokeObjectURL(objectUrl),60000);
+                    }catch(error){
+                        say(error.message||'Extraction impossible.');
+                    }
+                }
+            );
+
+        }else if(ext==='doc'){
+            host.innerHTML='<div class="mzouti-reader-toolbar"><b>Document Word ancien format (.DOC)</b><a class="secondary-btn" href="'+esc(url)+'" target="_blank" rel="noopener">Télécharger ↓</a></div><p class="muted">Le format DOC ancien ne peut pas être prévisualisé ici. Téléchargez-le pour l’ouvrir avec une application compatible.</p>';
+
+        }else{
+            host.innerHTML=readerFallback(url);
+        }
+
+    }catch(error){
+        host.innerHTML='<div class="mzouti-reader-error">'+esc(error.message||'Erreur de lecture.')+'</div>';
+    }
+}
+
+async function openWork(id){
+    const w=works.find(x=>x.id===id);
+    if(!w)return;
+
+    const share=location.origin+'/share/'+w.slug;
+    const isApp=w.category==='applications';
+    const hasFile=!!w.file_path;
+
+    $('detailContent').innerHTML=
+        '<span class="eyebrow">'+esc(w.category)+'</span>'+
+        '<h1>'+esc(w.title)+'</h1>'+
+        '<p class="muted">Par '+esc(w.author_name||'Membre MZOUTI')+'</p>'+
+        '<p>'+esc(w.description)+'</p>'+
+        (w.cover_display_url
+            ?'<img class="detail-cover" src="'+esc(w.cover_display_url)+'" alt="Couverture de '+esc(w.title)+'">'
+            :'')+
+        (hasFile
+            ?'<div id="mzoutiFileReader"></div>'
+            :'<div class="mzouti-work-content">'+esc(w.content||'')+'</div>')+
+        '<p class="mzouti-share-actions"><button class="secondary-btn" id="copyShare">Copier le lien de partage</button> <button class="secondary-btn" id="nativeShare">Partager</button></p>';
+
+    $('detailModal').hidden=false;
+
+    if(isApp){
+        const button=document.createElement('button');
+        button.className='primary-btn mzouti-install-button';
+        button.textContent='Télécharger l’application ↓';
+        button.onclick=()=>installWork(w.id);
+        $('detailContent').prepend(button);
+    }else if(hasFile){
+        await renderWorkFile(w,$('mzoutiFileReader'));
+    }
+
+    $('copyShare').onclick=()=>navigator.clipboard.writeText(share)
+        .then(()=>say('Lien copié'))
+        .catch(()=>say('Copie indisponible.'));
+
+    $('nativeShare').onclick=()=>navigator.share
+        ?navigator.share({title:w.title,url:share})
+        :navigator.clipboard.writeText(share)
+            .then(()=>say('Lien copié'))
+            .catch(()=>say('Partage indisponible.'));
+}
+
 $('closeDetail').onclick=()=>$('detailModal').hidden=true;
 async function loadProfile(){if(!user){view('auth');return}const {data}=await sb.from('profiles').select('*').eq('id',user.id).single();profile=data;$('profileEmail').textContent=user.email;$('displayName').value=data?.display_name||'';$('username').value=data?.username||'';$('bio').value=data?.bio||'';$('profileHeading').textContent=data?.display_name||'Mon profil';$('topName').textContent=data?.display_name||'Profil';if(data?.avatar_url){$('profileAvatar').src=data.avatar_url;$('topAvatar').src=data.avatar_url}const [wc,fc,inv]=await Promise.all([sb.from('works').select('id',{count:'exact',head:true}).eq('author_id',user.id),sb.from('favorites').select('id',{count:'exact',head:true}).eq('user_id',user.id),sb.from('profiles').select('invite_count').eq('id',user.id).single()]);$('myWorksCount').textContent=wc.count||0;$('myFavCount').textContent=fc.count||0;const n=inv.data?.invite_count||0;$('inviteTotal').textContent=n+'/15';$('inviteProgress').textContent=n+'/15';$('inviteBar').style.width=(n/15*100)+'%';$('inviteStatus').textContent=n>=15?'Toutes les récompenses ont été obtenues.':`Encore ${5-(n%5||0)} invitation(s) pour le prochain code.`;loadMyWorks()}
 $('saveProfile').onclick=async()=>{const p={display_name:$('displayName').value.trim(),username:$('username').value.trim().replace(/^@/,''),bio:$('bio').value.trim()};const {error}=await sb.from('profiles').update(p).eq('id',user.id);say(error?.message||'Profil mis à jour');if(!error)loadProfile()};
