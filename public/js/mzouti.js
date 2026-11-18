@@ -7,9 +7,40 @@ const slug=s=>String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u03
 function view(v){currentView=v;document.querySelectorAll('.view').forEach(x=>x.classList.toggle('active',x.id==='view-'+v));document.querySelectorAll('.bottom-nav [data-view]').forEach(x=>x.classList.toggle('active',x.dataset.view===v));if(v==='profile')loadProfile();if(v==='favorites')loadSaved('favorites');if(v==='playlist')loadSaved('playlist');if(v==='notifications')loadNotifications();if(v==='messages')loadConversations();}
 document.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click',()=>view(b.dataset.view)));
 function drawCats(){ $('categories').innerHTML=cats.map(([n,k])=>`<button class="category ${activeCategory===k?'active':''}" data-cat="${k}">${n}</button>`).join('');$('categories').querySelectorAll('button').forEach(b=>b.onclick=()=>{activeCategory=b.dataset.cat;drawCats();renderWorks();});}
-function card(w){const liked=!!w.liked,saved=!!w.saved;return `<article class="work-card"><div class="cover">${w.cover_display_url?`<img src="${esc(w.cover_display_url)}" alt="">`:`<span>✧</span>`}</div><div class="card-body"><span class="card-meta">${esc(w.category||'Document')}</span><h3>${esc(w.title)}</h3><p>${esc((w.description||'').slice(0,125))}</p><div class="card-actions"><button class="${liked?'liked':''}" data-fav="${w.id}" title="Favori">${liked?'♥':'♡'}</button><button data-save="${w.id}" title="Enregistrer pour plus tard">▤</button><button class="read-link" data-open="${w.id}">Lire ↗</button></div></div></article>`}
+function card(w){
+    const liked=!!w.liked;
+    const saved=!!w.saved;
+    const isApp=w.category==='applications';
+
+    return `<article class="work-card">
+        <div class="cover">
+            ${w.cover_display_url
+                ? `<img src="${esc(w.cover_display_url)}" alt="">`
+                : `<span>✧</span>`}
+        </div>
+
+        <div class="card-body">
+            <span class="card-meta">${esc(w.category||'Document')}</span>
+            <h3>${esc(w.title)}</h3>
+            <p>${esc((w.description||'').slice(0,125))}</p>
+
+            <div class="card-actions">
+                <button class="${liked?'liked':''}" data-fav="${w.id}">
+                    ${liked?'♥':'♡'}
+                </button>
+
+                <button data-save="${w.id}">▤</button>
+
+                ${isApp
+                    ? `<button class="read-link" data-install="${w.id}">Installer ↓</button>`
+                    : `<button class="read-link" data-open="${w.id}">Lire ↗</button>`
+                }
+            </div>
+        </div>
+    </article>`;
+}
 async function getSaved(){if(!user)return {f:[],p:[]};const [f,p]=await Promise.all([sb.from('favorites').select('work_id').eq('user_id',user.id),sb.from('playlist_items').select('work_id').eq('user_id',user.id)]);return {f:(f.data||[]).map(x=>x.work_id),p:(p.data||[]).map(x=>x.work_id)}}
-async function fetchWorks(){if(!sb){$('libraryGrid').innerHTML='<div class="empty-state">Configurez Supabase pour charger la bibliothèque.</div>';return}let q=sb.from('works').select('id,title,slug,category,description,content,cover_url,cover_path,author_name,created_at').eq('status','approved').order('created_at',{ascending:false});const {data,error}=await q;if(error){say(error.message);return}works=data||[];for(const w of works){if(w.cover_path){const {data:signed}=await sb.storage.from(cfg.bucket).createSignedUrl(w.cover_path,3600);w.cover_display_url=signed?.signedUrl||null}else w.cover_display_url=w.cover_url||null}const saved=await getSaved();works=works.map(w=>({...w,liked:saved.f.includes(w.id),saved:saved.p.includes(w.id)}));renderWorks();if(cfg.sharedSlug){const w=works.find(x=>x.slug===cfg.sharedSlug);if(w)openWork(w.id)}}
+async function fetchWorks(){if(!sb){$('libraryGrid').innerHTML='<div class="empty-state">Configurez Supabase pour charger la bibliothèque.</div>';return}let q=sb.from('works').select('id,title,slug,category,description,content,cover_url,cover_path,file_path,author_name,created_at').eq('status','approved').order('created_at',{ascending:false});const {data,error}=await q;if(error){say(error.message);return}works=data||[];for(const w of works){if(w.cover_path){const {data:signed}=await sb.storage.from(cfg.bucket).createSignedUrl(w.cover_path,3600);w.cover_display_url=signed?.signedUrl||null}else w.cover_display_url=w.cover_url||null}const saved=await getSaved();works=works.map(w=>({...w,liked:saved.f.includes(w.id),saved:saved.p.includes(w.id)}));renderWorks();if(cfg.sharedSlug){const w=works.find(x=>x.slug===cfg.sharedSlug);if(w)openWork(w.id)}}
 function renderInto(el,arr){el.innerHTML=arr.length?arr.map(card).join(''):'<div class="empty-state">Aucun contenu pour le moment.</div>';wireCards(el)}
 function renderWorks(){const term=$('searchInput').value.trim().toLowerCase();const a=works.filter(w=>(activeCategory==='all'||w.category===activeCategory)&&(!term||[w.title,w.description,w.author_name].join(' ').toLowerCase().includes(term)));renderInto($('libraryGrid'),a)}
 function wireCards(el){el.querySelectorAll('[data-fav]').forEach(b=>b.onclick=()=>toggleSaved('favorites',b.dataset.fav));el.querySelectorAll('[data-save]').forEach(b=>b.onclick=()=>toggleSaved('playlist',b.dataset.save));el.querySelectorAll('[data-open]').forEach(b=>b.onclick=()=>openWork(b.dataset.open))}
@@ -21,7 +52,7 @@ $('saveProfile').onclick=async()=>{const p={display_name:$('displayName').value.
 $('avatarInput').onchange=async e=>{const f=e.target.files[0];if(!f)return;if(f.size>4*1024*1024)return say('Image limitée à 4 Mo');const path=`${user.id}/${Date.now()}-${slug(f.name)}`;const {error}=await sb.storage.from('avatars').upload(path,f,{upsert:true});if(error)return say(error.message);const {data}=sb.storage.from('avatars').getPublicUrl(path);const r=await sb.from('profiles').update({avatar_url:data.publicUrl}).eq('id',user.id);if(r.error)say(r.error.message);else{say('Photo mise à jour');loadProfile()}};
 async function loadMyWorks(){const {data}=await sb.from('works').select('title,status,created_at').eq('author_id',user.id).order('created_at',{ascending:false});$('myWorks').innerHTML=(data||[]).map(w=>`<p>${esc(w.title)} — <b>${esc(w.status)}</b></p>`).join('')||'Aucune publication pour le moment.'}
 $('logoutBtn').onclick=async()=>{await sb.auth.signOut();say('Déconnexion réussie')};
-async function loadSaved(kind){if(!user){view('auth');return}const table=kind==='favorites'?'favorites':'playlist_items';const {data,error}=await sb.from(table).select('work_id,works(id,title,slug,category,description,content,cover_url,cover_path,author_name)').eq('user_id',user.id);if(error)return say(error.message);const arr=(data||[]).map(x=>x.works).filter(Boolean);for(const w of arr){if(w.cover_path){const {data:signed}=await sb.storage.from(cfg.bucket).createSignedUrl(w.cover_path,3600);w.cover_display_url=signed?.signedUrl||null}else w.cover_display_url=w.cover_url||null}renderInto($(kind==='favorites'?'favoritesGrid':'playlistGrid'),arr)}
+async function loadSaved(kind){if(!user){view('auth');return}const table=kind==='favorites'?'favorites':'playlist_items';const {data,error}=await sb.from(table).select('work_id,works(id,title,slug,category,description,content,cover_url,cover_path,file_path,author_name)').eq('user_id',user.id);if(error)return say(error.message);const arr=(data||[]).map(x=>x.works).filter(Boolean);for(const w of arr){if(w.cover_path){const {data:signed}=await sb.storage.from(cfg.bucket).createSignedUrl(w.cover_path,3600);w.cover_display_url=signed?.signedUrl||null}else w.cover_display_url=w.cover_url||null}renderInto($(kind==='favorites'?'favoritesGrid':'playlistGrid'),arr)}
 async function loadNotifications(){if(!user){$('notificationsList').textContent='Connectez-vous pour consulter vos notifications.';return}const {data,error}=await sb.from('notifications').select('*').eq('user_id',user.id).order('created_at',{ascending:false}).limit(50);$('notificationsList').innerHTML=error?esc(error.message):(data||[]).map(n=>`<p><b>${esc(n.title)}</b><br>${esc(n.body)}<small class="muted"> · ${new Date(n.created_at).toLocaleString('fr-FR')}</small></p>`).join('')||'Aucune notification.'}
 $('shareInvite').onclick=async()=>{if(!user)return view('auth');const url=location.origin+'/?ref='+user.id;try{if(navigator.share)await navigator.share({title:'Rejoins MZOUTI Files',url});else{await navigator.clipboard.writeText(url);say('Lien d’invitation copié')}}catch(e){}};
 async function authChanged(u){user=u;if(u){$('view-auth').classList.remove('active');await loadProfile();await fetchWorks();view('home')}else{$('topName').textContent='Connexion';await fetchWorks();view('home')}}
