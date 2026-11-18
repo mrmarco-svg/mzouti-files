@@ -1,0 +1,8 @@
+<?php
+return [
+'name'=>env('APP_NAME','MZOUTI Files'),'env'=>env('APP_ENV','production'),'debug'=>(bool)env('APP_DEBUG',false),
+'url'=>env('APP_URL','http://localhost'),'timezone'=>'America/Port-au-Prince','locale'=>'fr','fallback_locale'=>'fr',
+'key'=>env('APP_KEY'),'cipher'=>'AES-256-CBC','maintenance'=>['driver'=>'file','store'=>'database'],
+'providers'=>Illuminate\Support\ServiceProvider::defaultProviders()->merge([App\Providers\AppServiceProvider::class])->toArray(),
+'aliases'=>Illuminate\Support\Facades\Facade::defaultAliases()->toArray()
+];
