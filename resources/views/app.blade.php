@@ -83,7 +83,6 @@
       <div class="panel chat-panel"><div id="chatHeader" class="chat-header">Sélectionnez une conversation</div><div id="chatMessages" class="chat-messages"></div><form id="sendMessage" class="chat-compose"><input id="messageText" placeholder="Écrire un message..." autocomplete="off"><button class="primary-btn">Envoyer</button></form></div></div>
     </section>
 
-    <section id="view-admin" class="view"><div class="page-heading"><span class="eyebrow">ESPACE SÉCURISÉ</span><h1>Administration</h1></div><div class="panel"><h2>Publications à valider</h2><div id="pendingWorks"></div></div><div class="panel"><h2>Contrôle du groupe général</h2><p class="muted">Les membres peuvent toujours lire l'historique. La fermeture bloque l'envoi de nouveaux messages.</p><button class="secondary-btn" id="toggleGroup">Ouvrir / fermer les discussions</button><div id="adminMessageTools"></div></div></section>
   </main>
 
   <nav class="bottom-nav" aria-label="Navigation principale">
