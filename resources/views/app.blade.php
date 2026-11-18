@@ -7,11 +7,13 @@
   <meta name="description" content="Apprenez, découvrez et explorez avec MZOUTI Files.">
   <link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/css/mzouti.css">
+  <link rel="icon" type="image/png" href="/images/mzouti-files.png">
+  <link rel="apple-touch-icon" href="/images/mzouti-files.png">
 </head>
 <body>
 <div class="app-shell">
   <header class="topbar">
-    <a class="brand" href="/" aria-label="MZOUTI Files"><span class="brand-mark">M</span><span>MZOUTI <b>FILES</b></span></a>
+    <a class="brand" href="/" aria-label="MZOUTI Files"><img src="/images/mzouti-files.png" alt="MZOUTI Files" class="site-logo"><span>MZOUTI <b>FILES</b></span></a>
     <div class="top-actions">
       <button class="ghost-btn" data-view="home">Bibliothèque</button>
       <button class="icon-btn" data-view="notifications" aria-label="Notifications">♧<i id="notifDot"></i></button>
