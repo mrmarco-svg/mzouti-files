@@ -59,9 +59,50 @@
     <section id="view-notifications" class="view"><div class="page-heading"><span class="eyebrow">ACTUALITÉS</span><h1>Notifications</h1></div><div id="notificationsList" class="panel muted">Connectez-vous pour consulter vos notifications.</div></section>
 
     <section id="view-auth" class="view"><div class="auth-card panel"><div class="brand large"><span class="brand-mark">M</span><span>MZOUTI <b>FILES</b></span></div><span class="eyebrow">VOTRE ESPACE VOUS ATTEND</span><h1 id="authTitle">Bon retour parmi nous</h1><p class="muted">Connectez-vous pour retrouver votre bibliothèque personnelle.</p>
-      <div id="signupFields" hidden><label>Nom affiché<input id="authDisplayName" placeholder="Votre nom"></label><label>Code d'invitation (facultatif)<input id="referralCode" placeholder="Code reçu"></label></div>
-      <label>Adresse e-mail<input id="authEmail" type="email" autocomplete="email" placeholder="vous@exemple.com"></label><label>Mot de passe<input id="authPassword" type="password" autocomplete="current-password" placeholder="••••••••"></label>
-      <button class="primary-btn full" id="authSubmit">Se connecter</button><button class="secondary-btn full" id="googleLogin">Continuer avec Google</button><div class="auth-switch"><button id="toggleAuth">Créer un compte</button><button id="forgotPassword">Mot de passe oublié ?</button></div>
+      <div id="authFormFields">
+        <div id="signupFields" hidden>
+          <label>
+            Nom affiché
+            <input id="authDisplayName" placeholder="Votre nom">
+          </label>
+          <label>
+            Code d'invitation (facultatif)
+            <input id="referralCode" placeholder="Code reçu">
+          </label>
+        </div>
+
+        <label>
+          Adresse e-mail
+          <input id="authEmail" type="email" autocomplete="email" placeholder="vous@exemple.com">
+        </label>
+
+        <label>
+          Mot de passe
+          <input id="authPassword" type="password" autocomplete="current-password" placeholder="••••••••">
+        </label>
+
+        <button class="primary-btn full" id="authSubmit">Se connecter</button>
+        <button class="secondary-btn full" id="googleLogin">Continuer avec Google</button>
+
+        <div class="auth-switch">
+          <button id="toggleAuth">Créer un compte</button>
+          <button id="forgotPassword">Mot de passe oublié ?</button>
+        </div>
+      </div>
+
+      <div id="emailConfirmation" style="display:none;text-align:center;padding:28px 18px">
+        <div style="font-size:42px;margin-bottom:12px">✉</div>
+
+        <h2 style="margin:0 0 12px">Compte créé avec succès !</h2>
+
+        <p style="margin:0 0 22px">
+          Veuillez consulter votre boîte e-mail et cliquer sur le lien de confirmation pour activer votre compte.
+        </p>
+
+        <button class="primary-btn full" id="openEmailApp">
+          Ouvrir ma boîte e-mail
+        </button>
+      </div>
     </div></section>
 
     <section id="view-creator" class="view"><div class="page-heading"><span class="eyebrow">ESPACE CRÉATEUR</span><h1>Publier une œuvre</h1><p class="muted">Chaque publication est vérifiée par l'équipe avant d'être rendue publique.</p></div>
