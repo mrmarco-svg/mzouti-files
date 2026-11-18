@@ -43,9 +43,60 @@ async function getSaved(){if(!user)return {f:[],p:[]};const [f,p]=await Promise.
 async function fetchWorks(){if(!sb){$('libraryGrid').innerHTML='<div class="empty-state">Configurez Supabase pour charger la bibliothèque.</div>';return}let q=sb.from('works').select('id,title,slug,category,description,content,cover_url,cover_path,file_path,author_name,created_at').eq('status','approved').order('created_at',{ascending:false});const {data,error}=await q;if(error){say(error.message);return}works=data||[];for(const w of works){if(w.cover_path){const {data:signed}=await sb.storage.from(cfg.bucket).createSignedUrl(w.cover_path,3600);w.cover_display_url=signed?.signedUrl||null}else w.cover_display_url=w.cover_url||null}const saved=await getSaved();works=works.map(w=>({...w,liked:saved.f.includes(w.id),saved:saved.p.includes(w.id)}));renderWorks();if(cfg.sharedSlug){const w=works.find(x=>x.slug===cfg.sharedSlug);if(w)openWork(w.id)}}
 function renderInto(el,arr){el.innerHTML=arr.length?arr.map(card).join(''):'<div class="empty-state">Aucun contenu pour le moment.</div>';wireCards(el)}
 function renderWorks(){const term=$('searchInput').value.trim().toLowerCase();const a=works.filter(w=>(activeCategory==='all'||w.category===activeCategory)&&(!term||[w.title,w.description,w.author_name].join(' ').toLowerCase().includes(term)));renderInto($('libraryGrid'),a)}
-function wireCards(el){el.querySelectorAll('[data-fav]').forEach(b=>b.onclick=()=>toggleSaved('favorites',b.dataset.fav));el.querySelectorAll('[data-save]').forEach(b=>b.onclick=()=>toggleSaved('playlist',b.dataset.save));el.querySelectorAll('[data-open]').forEach(b=>b.onclick=()=>openWork(b.dataset.open))}
+async function installWork(id) {
+    const w = works.find(x => x.id === id);
+
+    if (!w) return;
+
+    if (w.category !== 'applications') {
+        return openWork(id);
+    }
+
+    if (!w.file_path) {
+        return say('Le fichier APK n’est pas encore disponible.');
+    }
+
+    say('Préparation du téléchargement…');
+
+    const { data, error } = await sb.storage
+        .from(cfg.bucket)
+        .createSignedUrl(w.file_path, 120, {
+            download: true
+        });
+
+    if (error || !data?.signedUrl) {
+        return say(error?.message || 'Impossible de préparer le téléchargement.');
+    }
+
+    const a = document.createElement('a');
+
+    a.href = data.signedUrl;
+    a.download = (w.title || 'application')
+        .replace(/[^a-z0-9_-]/gi, '-') + '.apk';
+
+    a.rel = 'noopener';
+
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+
+    say('Téléchargement lancé. Ouvrez le fichier APK téléchargé pour installer l’application.');
+}
+
+function wireCards(el){el.querySelectorAll('[data-fav]').forEach(b=>b.onclick=()=>toggleSaved('favorites',b.dataset.fav));el.querySelectorAll('[data-save]').forEach(b=>b.onclick=()=>toggleSaved('playlist',b.dataset.save));el.querySelectorAll('[data-open]').forEach(b=>b.onclick=()=>openWork(b.dataset.open));el.querySelectorAll('[data-install]').forEach(b=>{b.onclick=()=>installWork(b.dataset.install)})}
 async function toggleSaved(table,id){if(!user)return view('auth');const col=table==='favorites'?'favorites':'playlist_items';const {data}=await sb.from(col).select('id').eq('user_id',user.id).eq('work_id',id).maybeSingle();let r;if(data)r=await sb.from(col).delete().eq('id',data.id);else r=await sb.from(col).insert({user_id:user.id,work_id:id});if(r.error)say(r.error.message);else{say(data?'Retiré':'Enregistré');await fetchWorks()}}
-async function openWork(id){const w=works.find(x=>x.id===id);if(!w)return;const share=location.origin+'/share/'+w.slug;$('detailContent').innerHTML=`<span class="eyebrow">${esc(w.category)}</span><h1>${esc(w.title)}</h1><p class="muted">Par ${esc(w.author_name||'Membre MZOUTI')}</p><p>${esc(w.description)}</p>${w.cover_display_url?`<img class="detail-cover" src="${esc(w.cover_display_url)}" alt="Couverture de ${esc(w.title)}">`:''}<div>${esc(w.content||'')}</div><p><button class="secondary-btn" id="copyShare">Copier le lien de partage</button> <button class="secondary-btn" id="nativeShare">Partager</button></p>`;$('detailModal').hidden=false;$('copyShare').onclick=()=>navigator.clipboard.writeText(share).then(()=>say('Lien copié'));$('nativeShare').onclick=()=>navigator.share? navigator.share({title:w.title,url:share}):navigator.clipboard.writeText(share).then(()=>say('Lien copié'))}
+async function openWork(id){const w=works.find(x=>x.id===id);if(!w)return;const share=location.origin+'/share/'+w.slug;$('detailContent').innerHTML=`<span class="eyebrow">${esc(w.category)}</span><h1>${esc(w.title)}</h1><p class="muted">Par ${esc(w.author_name||'Membre MZOUTI')}</p><p>${esc(w.description)}</p>${w.cover_display_url?`<img class="detail-cover" src="${esc(w.cover_display_url)}" alt="Couverture de ${esc(w.title)}">`:''}<div>${esc(w.content||'')}</div><p><button class="secondary-btn" id="copyShare">Copier le lien de partage</button> <button class="secondary-btn" id="nativeShare">Partager</button></p>`;$('detailModal').hidden=false;
+if (w.category === 'applications') {
+    const installButton = document.createElement('button');
+
+    installButton.className = 'primary-btn';
+    installButton.textContent = 'Installer l’application ↓';
+
+    installButton.onclick = () => installWork(w.id);
+
+    $('detailContent').prepend(installButton);
+}
+$('copyShare').onclick=()=>navigator.clipboard.writeText(share).then(()=>say('Lien copié'));$('nativeShare').onclick=()=>navigator.share? navigator.share({title:w.title,url:share}):navigator.clipboard.writeText(share).then(()=>say('Lien copié'))}
 $('closeDetail').onclick=()=>$('detailModal').hidden=true;
 async function loadProfile(){if(!user){view('auth');return}const {data}=await sb.from('profiles').select('*').eq('id',user.id).single();profile=data;$('profileEmail').textContent=user.email;$('displayName').value=data?.display_name||'';$('username').value=data?.username||'';$('bio').value=data?.bio||'';$('profileHeading').textContent=data?.display_name||'Mon profil';$('topName').textContent=data?.display_name||'Profil';if(data?.avatar_url){$('profileAvatar').src=data.avatar_url;$('topAvatar').src=data.avatar_url}const [wc,fc,inv]=await Promise.all([sb.from('works').select('id',{count:'exact',head:true}).eq('author_id',user.id),sb.from('favorites').select('id',{count:'exact',head:true}).eq('user_id',user.id),sb.from('profiles').select('invite_count').eq('id',user.id).single()]);$('myWorksCount').textContent=wc.count||0;$('myFavCount').textContent=fc.count||0;const n=inv.data?.invite_count||0;$('inviteTotal').textContent=n+'/15';$('inviteProgress').textContent=n+'/15';$('inviteBar').style.width=(n/15*100)+'%';$('inviteStatus').textContent=n>=15?'Toutes les récompenses ont été obtenues.':`Encore ${5-(n%5||0)} invitation(s) pour le prochain code.`;loadMyWorks()}
 $('saveProfile').onclick=async()=>{const p={display_name:$('displayName').value.trim(),username:$('username').value.trim().replace(/^@/,''),bio:$('bio').value.trim()};const {error}=await sb.from('profiles').update(p).eq('id',user.id);say(error?.message||'Profil mis à jour');if(!error)loadProfile()};
